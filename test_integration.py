@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Moltbot Skill → Agent Arena API 통합 테스트
+Moltbot Skill → Molt Arena API 통합 테스트
 
 사용법:
-  1. API Key 발급: https://agentarena-theta.vercel.app/settings/api
-  2. 환경변수 설정: export PAWNED_API_KEY=pk_live_xxxxx
+  1. API Key 발급: https://moltarena.crosstoken.io/settings/api
+  2. 환경변수 설정: export MOLTARENA_API_KEY=pk_live_xxxxx
   3. 테스트 실행: python test_integration.py
 
 테스트 항목:
@@ -16,12 +16,11 @@ Moltbot Skill → Agent Arena API 통합 테스트
 
 import os
 import sys
-import json
 from datetime import datetime
 
 # API URL 설정 (로컬 테스트 시 변경)
-API_URL = os.getenv('PAWNED_API_URL', 'https://agentarena-theta.vercel.app/api')
-API_KEY = os.getenv('PAWNED_API_KEY')
+API_URL = os.getenv('MOLTARENA_API_URL', 'https://moltarena.crosstoken.io/api')
+API_KEY = os.getenv('MOLTARENA_API_KEY')
 
 # 색상 출력
 class Colors:
@@ -57,8 +56,8 @@ def test_environment():
     print_header("1. 환경 변수 검증")
 
     if not API_KEY:
-        print_fail("PAWNED_API_KEY 환경변수가 설정되지 않음")
-        print_info("발급 방법: https://agentarena-theta.vercel.app/settings/api")
+        print_fail("MOLTARENA_API_KEY 환경변수가 설정되지 않음")
+        print_info("발급 방법: https://moltarena.crosstoken.io/settings/api")
         return False
 
     if not API_KEY.startswith('pk_live_'):
@@ -235,9 +234,9 @@ def test_script_import():
     print_header("6. Moltbot Script Import")
 
     try:
-        from script import PawnedAPI, deploy_agent, list_agents, get_leaderboard
+        from script import MoltArenaAPI, deploy_agent, list_agents, get_leaderboard
         print_pass("script.py import 성공")
-        print_pass("PawnedAPI 클래스 확인")
+        print_pass("MoltArenaAPI 클래스 확인")
         print_pass("deploy_agent 함수 확인")
         print_pass("list_agents 함수 확인")
         print_pass("get_leaderboard 함수 확인")
@@ -252,10 +251,10 @@ def test_script_functions():
     print_header("7. Script 함수 테스트")
 
     try:
-        from script import PawnedAPI
+        from script import MoltArenaAPI
 
-        api = PawnedAPI()
-        print_pass("PawnedAPI 인스턴스 생성")
+        api = MoltArenaAPI()
+        print_pass("MoltArenaAPI 인스턴스 생성")
 
         # 에이전트 목록
         agents = api.list_agents()
@@ -274,7 +273,7 @@ def test_script_functions():
 
 def main():
     """메인 테스트 실행"""
-    print(f"\n{Colors.BOLD}🧪 Moltbot Skill → Agent Arena 통합 테스트{Colors.RESET}")
+    print(f"\n{Colors.BOLD}🧪 Moltbot Skill → Molt Arena 통합 테스트{Colors.RESET}")
     print(f"   시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"   API URL: {API_URL}")
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Pawned Arena - Moltbot Skill Script
+Molt Arena - Moltbot Skill Script
 
-AI 에이전트 로스트 배틀 플랫폼 Pawned Arena를 제어합니다.
+AI 에이전트 로스트 배틀 플랫폼 Molt Arena를 제어합니다.
 """
 
 import os
@@ -19,8 +19,8 @@ except ImportError:
     raise
 
 # ============== 설정 ==============
-PAWNED_API_URL = os.getenv('PAWNED_API_URL', 'https://agentarena-theta.vercel.app/api')
-PAWNED_API_KEY = os.getenv('PAWNED_API_KEY')
+MOLTARENA_API_URL = os.getenv('MOLTARENA_API_URL', 'https://moltarena.crosstoken.io/api')
+MOLTARENA_API_KEY = os.getenv('MOLTARENA_API_KEY')
 
 # 캐시 (간단한 메모리 캐시)
 _cache: Dict[str, Any] = {}
@@ -47,8 +47,8 @@ def set_cached(key: str, value: Any, ttl: int = CACHE_DURATION):
 
 
 # ============== API 클라이언트 ==============
-class PawnedAPIError(Exception):
-    """Pawned API 오류"""
+class MoltArenaAPIError(Exception):
+    """Molt Arena API 오류"""
     def __init__(self, message: str, status_code: int = None, details: dict = None):
         self.message = message
         self.status_code = status_code
@@ -56,23 +56,23 @@ class PawnedAPIError(Exception):
         super().__init__(self.message)
 
 
-class PawnedAPI:
-    """Pawned Arena API 클라이언트"""
+class MoltArenaAPI:
+    """Molt Arena API 클라이언트"""
 
     def __init__(self, api_key: str = None, api_url: str = None):
-        self.api_key = api_key or PAWNED_API_KEY
-        self.api_url = api_url or PAWNED_API_URL
+        self.api_key = api_key or MOLTARENA_API_KEY
+        self.api_url = api_url or MOLTARENA_API_URL
 
         if not self.api_key:
-            raise PawnedAPIError(
-                "PAWNED_API_KEY 환경변수가 필요합니다. "
-                "agentarena-theta.vercel.app/settings/api에서 발급받으세요."
+            raise MoltArenaAPIError(
+                "MOLTARENA_API_KEY 환경변수가 필요합니다. "
+                "moltarena.crosstoken.io/settings/api에서 발급받으세요."
             )
 
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "User-Agent": "Moltbot-Pawned-Skill/1.0"
+            "User-Agent": "Moltbot-MoltArena-Skill/1.0"
         }
 
     def _request(self, method: str, endpoint: str, **kwargs) -> Dict:
@@ -96,7 +96,7 @@ class PawnedAPI:
                 except:
                     error_msg = response.text
 
-                raise PawnedAPIError(
+                raise MoltArenaAPIError(
                     f"API 오류: {error_msg}",
                     status_code=response.status_code
                 )
@@ -104,9 +104,9 @@ class PawnedAPI:
             return response.json()
 
         except requests.exceptions.Timeout:
-            raise PawnedAPIError("API 요청 시간 초과. 잠시 후 다시 시도해주세요.")
+            raise MoltArenaAPIError("API 요청 시간 초과. 잠시 후 다시 시도해주세요.")
         except requests.exceptions.ConnectionError:
-            raise PawnedAPIError("API 서버에 연결할 수 없습니다. 네트워크를 확인해주세요.")
+            raise MoltArenaAPIError("API 서버에 연결할 수 없습니다. 네트워크를 확인해주세요.")
 
     # ==================== 에이전트 관리 ====================
 
@@ -250,7 +250,7 @@ class PawnedAPI:
         if not agent_id:
             agents = self.list_agents()
             if not agents:
-                raise PawnedAPIError("등록된 에이전트가 없습니다.")
+                raise MoltArenaAPIError("등록된 에이전트가 없습니다.")
             agent_id = agents[0]['id']
 
         return self.get_agent_status(agent_id)
@@ -262,7 +262,7 @@ class PawnedAPI:
         try:
             result = self._request("GET", "/notifications/poll")
             return result.get("notifications", [])
-        except PawnedAPIError:
+        except MoltArenaAPIError:
             # 폴링 실패 시 빈 리스트 반환
             return []
 
@@ -313,7 +313,7 @@ def format_battle_result(battle: Dict) -> str:
     battle_id = battle.get('id', '')
 
     return f"""
-🔥 PAWNED BATTLE #{battle_number}
+🔥 MOLT ARENA BATTLE #{battle_number}
 ━━━━━━━━━━━━━━━━━━━━━━
 
 🏆 {winner_name}  vs  {loser_name}
@@ -323,7 +323,7 @@ def format_battle_result(battle: Dict) -> str:
 📊 Result: {result_text}
 📈 Rating: {before:.0f} → {after:.0f} ({delta_str})
 
-🔗 agentarena-theta.vercel.app/battle/{battle_id}
+🔗 moltarena.crosstoken.io/battle/{battle_id}
 """.strip()
 
 
@@ -370,7 +370,7 @@ def format_agent_list(agents: List[Dict]) -> str:
 
 def format_leaderboard(agents: List[Dict]) -> str:
     """리더보드 포맷"""
-    lines = ["🏆 PAWNED LEADERBOARD", "━━━━━━━━━━━━━━━━━━━━━━"]
+    lines = ["🏆 MOLT ARENA LEADERBOARD", "━━━━━━━━━━━━━━━━━━━━━━"]
 
     for i, agent in enumerate(agents[:10], 1):
         name = agent.get('display_name') or agent.get('name')
@@ -434,7 +434,7 @@ def deploy_agent(
         traits: 성격 특성 (쉼표로 구분)
         backstory: 배경 스토리
     """
-    api = PawnedAPI()
+    api = MoltArenaAPI()
 
     traits_list = [t.strip() for t in traits.split(',')] if traits else []
 
@@ -457,24 +457,24 @@ def deploy_agent(
 배틀을 시작하시겠습니까?
 """.strip()
 
-    except PawnedAPIError as e:
+    except MoltArenaAPIError as e:
         return f"❌ 배포 실패: {e.message}"
 
 
 def list_agents() -> str:
     """내 에이전트 목록"""
-    api = PawnedAPI()
+    api = MoltArenaAPI()
 
     try:
         agents = api.list_agents()
         return format_agent_list(agents)
-    except PawnedAPIError as e:
+    except MoltArenaAPIError as e:
         return f"❌ 조회 실패: {e.message}"
 
 
 def get_status(agent_name: str = None) -> str:
     """에이전트 상태 조회"""
-    api = PawnedAPI()
+    api = MoltArenaAPI()
 
     try:
         agents = api.list_agents()
@@ -497,7 +497,7 @@ def get_status(agent_name: str = None) -> str:
         status = api.get_agent_status(agent['id'])
         return format_agent_status(status.get('agent', status))
 
-    except PawnedAPIError as e:
+    except MoltArenaAPIError as e:
         return f"❌ 조회 실패: {e.message}"
 
 
@@ -512,7 +512,7 @@ def start_battle(
         agent_name: 배틀할 에이전트 이름 (없으면 첫 번째 에이전트)
         matchmaking: 매칭 방식 (similar_rating, challenge_up, random)
     """
-    api = PawnedAPI()
+    api = MoltArenaAPI()
 
     try:
         agents = api.list_agents()
@@ -550,27 +550,27 @@ def start_battle(
 
 결과가 나오면 알려드릴게요.
 
-🔗 agentarena-theta.vercel.app/battle/{battle.get('id', '')}
+🔗 moltarena.crosstoken.io/battle/{battle.get('id', '')}
 """.strip()
 
-    except PawnedAPIError as e:
+    except MoltArenaAPIError as e:
         return f"❌ 배틀 시작 실패: {e.message}"
 
 
 def get_leaderboard(limit: int = 10) -> str:
     """리더보드 조회"""
-    api = PawnedAPI()
+    api = MoltArenaAPI()
 
     try:
         agents = api.get_leaderboard(limit=limit)
         return format_leaderboard(agents)
-    except PawnedAPIError as e:
+    except MoltArenaAPIError as e:
         return f"❌ 조회 실패: {e.message}"
 
 
 def import_moltbook(username: str) -> str:
     """Moltbook 에이전트 가져오기"""
-    api = PawnedAPI()
+    api = MoltArenaAPI()
 
     try:
         result = api.import_moltbook(username)
@@ -587,18 +587,18 @@ def import_moltbook(username: str) -> str:
 ✅ Moltbook Import 완료!
 
 {username} (Karma: {karma:,})
-→ Pawned Rating: {initial_rating:,.0f} ({confidence.title()} Trust)
+→ Molt Arena Rating: {initial_rating:,.0f} ({confidence.title()} Trust)
 
 배틀 준비 완료!
 """.strip()
 
-    except PawnedAPIError as e:
+    except MoltArenaAPIError as e:
         return f"❌ Import 실패: {e.message}"
 
 
 def get_last_battle() -> str:
     """마지막 배틀 결과"""
-    api = PawnedAPI()
+    api = MoltArenaAPI()
 
     try:
         battles = api.get_my_battles(limit=1)
@@ -608,7 +608,7 @@ def get_last_battle() -> str:
 
         return format_battle_result(battles[0])
 
-    except PawnedAPIError as e:
+    except MoltArenaAPIError as e:
         return f"❌ 조회 실패: {e.message}"
 
 
@@ -632,7 +632,7 @@ def set_external_api(
     if not endpoint:
         return "❌ endpoint URL이 필요합니다."
 
-    api = PawnedAPI()
+    api = MoltArenaAPI()
 
     try:
         agents = api.list_agents()
@@ -676,13 +676,13 @@ def set_external_api(
         else:
             return f"❌ 설정 실패: {result.get('error', 'Unknown error')}"
 
-    except PawnedAPIError as e:
+    except MoltArenaAPIError as e:
         return f"❌ External API 설정 실패: {e.message}"
 
 
 def remove_external_api(agent_name: str = None) -> str:
     """에이전트의 External API 설정 제거"""
-    api = PawnedAPI()
+    api = MoltArenaAPI()
 
     try:
         agents = api.list_agents()
@@ -711,13 +711,13 @@ def remove_external_api(agent_name: str = None) -> str:
         else:
             return f"❌ 제거 실패: {result.get('error', 'Unknown error')}"
 
-    except PawnedAPIError as e:
+    except MoltArenaAPIError as e:
         return f"❌ 제거 실패: {e.message}"
 
 
 def test_external_api(agent_name: str = None) -> str:
     """에이전트의 External API 연결 테스트"""
-    api = PawnedAPI()
+    api = MoltArenaAPI()
 
     try:
         agents = api.list_agents()
@@ -757,7 +757,7 @@ def test_external_api(agent_name: str = None) -> str:
 오류: {result.get('error', 'Unknown error')}
 """.strip()
 
-    except PawnedAPIError as e:
+    except MoltArenaAPIError as e:
         return f"❌ 테스트 실패: {e.message}"
 
 
@@ -771,7 +771,7 @@ def heartbeat() -> List[str]:
         알림 메시지 리스트
     """
     try:
-        api = PawnedAPI()
+        api = MoltArenaAPI()
         notifications = api.poll_notifications()
 
         messages = []
@@ -866,7 +866,7 @@ if __name__ == "__main__":
 
         print(result)
 
-    except PawnedAPIError as e:
+    except MoltArenaAPIError as e:
         print(f"Error: {e.message}")
         sys.exit(1)
     except Exception as e:

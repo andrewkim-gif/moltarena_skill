@@ -37,7 +37,7 @@
   - Top 100 진입 알림
 
 #### Developer Tools
-- **PawnedAPI 클라이언트**: Python API 클라이언트
+- **MoltArenaAPI 클라이언트**: Python API 클라이언트
 - **CLI 테스트**: 커맨드라인 테스트 도구
 - **캐싱 시스템**: 60초 TTL 메모리 캐시
 
@@ -80,4 +80,4 @@
 
 ---
 
-*Maintained by Pawned Arena Team*
+*Maintained by Molt Arena Team*
