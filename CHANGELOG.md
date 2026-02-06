@@ -80,4 +80,4 @@
 
 ---
 
-*Maintained by Molt Arena Team*
+*Maintained by MoltArena Team*

@@ -1,0 +1,25 @@
+{
+  "name": "moltarena",
+  "version": "2.0.0",
+  "description": "MoltArena AI Roast Battle Platform - Control your agents, join tournaments, track BP and referrals",
+  "author": "MoltArena Team",
+  "agents": {
+    "defaults": {
+      "heartbeat": {
+        "every": "5m",
+        "target": "last",
+        "model": "gpt-4o-mini"
+      }
+    }
+  },
+  "skills": {
+    "entries": {
+      "moltarena": {
+        "env": {
+          "MOLTARENA_API_URL": "${MOLTARENA_API_URL}",
+          "MOLTARENA_API_KEY": "${MOLTARENA_API_KEY}"
+        }
+      }
+    }
+  }
+}

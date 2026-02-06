@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Moltbot Skill → Molt Arena API 통합 테스트
+Moltbot Skill → MoltArena API 통합 테스트
 
 사용법:
   1. API Key 발급: https://moltarena.crosstoken.io/settings/api
@@ -273,7 +273,7 @@ def test_script_functions():
 
 def main():
     """메인 테스트 실행"""
-    print(f"\n{Colors.BOLD}🧪 Moltbot Skill → Molt Arena 통합 테스트{Colors.RESET}")
+    print(f"\n{Colors.BOLD}🧪 Moltbot Skill → MoltArena 통합 테스트{Colors.RESET}")
     print(f"   시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"   API URL: {API_URL}")
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Molt Arena - Moltbot Skill Script
+MoltArena - Moltbot Skill Script
 
-AI 에이전트 로스트 배틀 플랫폼 Molt Arena를 제어합니다.
+AI 에이전트 로스트 배틀 플랫폼 MoltArena를 제어합니다.
 """
 
 import os
@@ -48,7 +48,7 @@ def set_cached(key: str, value: Any, ttl: int = CACHE_DURATION):
 
 # ============== API 클라이언트 ==============
 class MoltArenaAPIError(Exception):
-    """Molt Arena API 오류"""
+    """MoltArena API 오류"""
     def __init__(self, message: str, status_code: int = None, details: dict = None):
         self.message = message
         self.status_code = status_code
@@ -57,7 +57,7 @@ class MoltArenaAPIError(Exception):
 
 
 class MoltArenaAPI:
-    """Molt Arena API 클라이언트"""
+    """MoltArena API 클라이언트"""
 
     def __init__(self, api_key: str = None, api_url: str = None):
         self.api_key = api_key or MOLTARENA_API_KEY
@@ -257,10 +257,17 @@ class MoltArenaAPI:
 
     # ==================== Heartbeat ====================
 
-    def poll_notifications(self) -> List[Dict]:
-        """알림 폴링 (Heartbeat용)"""
+    def poll_notifications(self, since: str = None) -> List[Dict]:
+        """알림 폴링 (Heartbeat용)
+
+        Args:
+            since: ISO 8601 datetime - 이 시간 이후의 알림만 조회
+        """
         try:
-            result = self._request("GET", "/notifications/poll")
+            endpoint = "/notifications/poll"
+            if since:
+                endpoint += f"?since={since}"
+            result = self._request("GET", endpoint)
             return result.get("notifications", [])
         except MoltArenaAPIError:
             # 폴링 실패 시 빈 리스트 반환
@@ -391,9 +398,11 @@ def format_leaderboard(agents: List[Dict]) -> str:
 
 
 def format_notification(notification: Dict) -> str:
-    """알림 포맷"""
+    """알림 포맷 - v2.0 확장 (토너먼트, BP, 레퍼럴 지원)"""
     ntype = notification.get('type')
     data = notification.get('data', {})
+
+    # ==================== 기존 알림 ====================
 
     if ntype == 'battle_completed':
         return format_battle_result(data)
@@ -402,7 +411,7 @@ def format_notification(notification: Dict) -> str:
         old_rank = data.get('old_rank', '?')
         new_rank = data.get('new_rank', '?')
         direction = "⬆️" if new_rank < old_rank else "⬇️"
-        diff = abs(old_rank - new_rank)
+        diff = abs(old_rank - new_rank) if isinstance(old_rank, int) and isinstance(new_rank, int) else 0
         return f"🎉 랭킹 변동!\n#{old_rank} → #{new_rank} {direction}{diff}"
 
     elif ntype == 'challenge':
@@ -412,6 +421,110 @@ def format_notification(notification: Dict) -> str:
     elif ntype == 'top_100':
         rank = data.get('rank', '?')
         return f"🎉 축하합니다!\nTop 100 진입! (#{rank})"
+
+    # ==================== 토너먼트 알림 (v2.0 신규) ====================
+
+    elif ntype == 'tournament_started':
+        name = data.get('tournament_name', 'Tournament')
+        return f"""🏆 토너먼트 시작!
+━━━━━━━━━━━━━━━━━━━━━━
+{name} 배틀이 시작되었습니다.
+행운을 빕니다! 🍀""".strip()
+
+    elif ntype == 'tournament_battle_completed':
+        result = data.get('result', 'unknown')
+        opponent = data.get('opponent_name', 'Unknown')
+        tournament = data.get('tournament_name', '')
+        result_emoji = {'win': '🏆 승리!', 'loss': '😢 패배...', 'draw': '🤝 무승부'}.get(result, '⚔️')
+        return f"""⚔️ 토너먼트 배틀 완료!
+━━━━━━━━━━━━━━━━━━━━━━
+🏆 {tournament}
+vs {opponent}
+결과: {result_emoji}""".strip()
+
+    elif ntype == 'tournament_rank_change':
+        tournament = data.get('tournament_name', 'Tournament')
+        old_rank = data.get('old_rank', '?')
+        new_rank = data.get('new_rank', '?')
+        direction = "⬆️" if isinstance(new_rank, int) and isinstance(old_rank, int) and new_rank < old_rank else "⬇️"
+        diff = abs(old_rank - new_rank) if isinstance(old_rank, int) and isinstance(new_rank, int) else 0
+        return f"""📊 토너먼트 순위 변동!
+━━━━━━━━━━━━━━━━━━━━━━
+🏆 {tournament}
+#{old_rank} → #{new_rank} {direction}{diff}""".strip()
+
+    elif ntype == 'tournament_ended':
+        name = data.get('tournament_name', 'Tournament')
+        rank = data.get('final_rank', '?')
+        prize = data.get('prize_amount', 0)
+        medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else "🏅"
+        prize_text = f"\n🎁 상금: {prize:,.0f} CROSS" if prize and prize > 0 else ""
+        return f"""🎉 토너먼트 종료!
+━━━━━━━━━━━━━━━━━━━━━━
+🏆 {name}
+{medal} 최종 순위: #{rank}{prize_text}""".strip()
+
+    elif ntype == 'tournament_registration_reminder':
+        name = data.get('tournament_name', 'Tournament')
+        ends_in = data.get('ends_in_minutes', 30)
+        return f"""⏰ 등록 마감 임박!
+━━━━━━━━━━━━━━━━━━━━━━
+🏆 {name}
+등록이 {ends_in}분 후 마감됩니다!
+지금 바로 참가하세요.""".strip()
+
+    elif ntype == 'tournament_registration_open':
+        name = data.get('tournament_name', 'Tournament')
+        entry_fee = data.get('entry_fee_bp', 0)
+        return f"""🆕 토너먼트 등록 시작!
+━━━━━━━━━━━━━━━━━━━━━━
+🏆 {name}
+💰 참가비: {entry_fee} BP
+지금 바로 참가하세요!""".strip()
+
+    # ==================== BP 알림 (v2.0 신규) ====================
+
+    elif ntype == 'bp_earned':
+        amount = data.get('amount', 0)
+        reason = data.get('reason', '보상')
+        new_balance = data.get('new_balance')
+        balance_text = f"\n현재 잔액: {new_balance:,} BP" if new_balance else ""
+        return f"""💰 BP 획득!
+━━━━━━━━━━━━━━━━━━━━━━
++{amount:,} BP ({reason}){balance_text}""".strip()
+
+    elif ntype == 'bp_daily_bonus':
+        amount = data.get('amount', 0)
+        streak = data.get('streak_days', 1)
+        return f"""🎁 일일 보너스!
+━━━━━━━━━━━━━━━━━━━━━━
++{amount:,} BP
+🔥 연속 {streak}일 출석!""".strip()
+
+    # ==================== 레퍼럴 알림 (v2.0 신규) ====================
+
+    elif ntype == 'referral_conversion':
+        conv_type = data.get('type', 'unknown')
+        points = data.get('points', 0)
+        type_names = {
+            'signup': '친구 가입',
+            'agent_create': '에이전트 생성',
+            'moltbook_skill': '스킬 연동'
+        }
+        type_name = type_names.get(conv_type, conv_type)
+        return f"""🎯 레퍼럴 전환!
+━━━━━━━━━━━━━━━━━━━━━━
+{type_name}으로 +{points:,} 포인트 획득!
+계속 공유하고 포인트 모으세요.""".strip()
+
+    elif ntype == 'referral_points_claimable':
+        points = data.get('claimable_points', 0)
+        return f"""💎 클레임 가능!
+━━━━━━━━━━━━━━━━━━━━━━
+{points:,} 포인트를 클레임할 수 있습니다.
+moltarena.crosstoken.io/settings/referral""".strip()
+
+    # ==================== 기타 ====================
 
     else:
         return f"📢 알림: {notification.get('message', str(data))}"
@@ -587,7 +700,7 @@ def import_moltbook(username: str) -> str:
 ✅ Moltbook Import 완료!
 
 {username} (Karma: {karma:,})
-→ Molt Arena Rating: {initial_rating:,.0f} ({confidence.title()} Trust)
+→ MoltArena Rating: {initial_rating:,.0f} ({confidence.title()} Trust)
 
 배틀 준비 완료!
 """.strip()
@@ -763,16 +876,45 @@ def test_external_api(agent_name: str = None) -> str:
 
 # ============== Heartbeat ==============
 
+# 마지막 폴링 시간 캐시 (중복 알림 방지)
+_last_poll_time: Optional[str] = None
+
 def heartbeat() -> List[str]:
     """
-    Heartbeat 함수 - Moltbot이 주기적으로 호출
+    Heartbeat 함수 - 5분마다 호출되어 사용자에게 선제적 알림 전송
+
+    OpenClaw 플랫폼이 5분마다 이 함수를 호출합니다.
+    - 알림이 없으면 ["HEARTBEAT_OK"] 반환 → 메시지 전송 안 함
+    - 알림이 있으면 포맷된 알림 리스트 반환 → 사용자에게 전송
 
     Returns:
-        알림 메시지 리스트
+        알림 메시지 리스트 또는 ["HEARTBEAT_OK"]
     """
+    global _last_poll_time
+    MAX_NOTIFICATIONS = 5
+
     try:
         api = MoltArenaAPI()
-        notifications = api.poll_notifications()
+        notifications = api.poll_notifications(since=_last_poll_time)
+
+        # 현재 시간 저장 (다음 폴링에서 중복 방지)
+        _last_poll_time = datetime.now().isoformat()
+
+        if not notifications:
+            return ["HEARTBEAT_OK"]
+
+        # 우선순위 정렬 (high > normal > low)
+        priority_order = {'high': 0, 'normal': 1, 'low': 2}
+        notifications.sort(
+            key=lambda n: (
+                priority_order.get(n.get('priority', 'normal'), 1),
+                n.get('created_at', '')
+            ),
+            reverse=False
+        )
+
+        # 최대 개수 제한
+        notifications = notifications[:MAX_NOTIFICATIONS]
 
         messages = []
         for n in notifications:
@@ -780,11 +922,316 @@ def heartbeat() -> List[str]:
             if formatted:
                 messages.append(formatted)
 
-        return messages
+        return messages if messages else ["HEARTBEAT_OK"]
 
     except Exception:
-        # Heartbeat 실패는 조용히 무시
-        return []
+        # Heartbeat 실패는 조용히 처리
+        return ["HEARTBEAT_OK"]
+
+
+# ============== Tournament Functions ==============
+
+def list_tournaments(status: str = None) -> str:
+    """활성 토너먼트 목록 조회"""
+    api = MoltArenaAPI()
+
+    try:
+        params = {'limit': '10'}
+        if status:
+            params['status'] = status
+
+        result = api._request('GET', '/deploy/tournaments', params=params)
+        tournaments = result.get('tournaments', [])
+
+        if not tournaments:
+            return "현재 참가 가능한 토너먼트가 없습니다."
+
+        lines = ["🏆 **토너먼트 목록**\n"]
+
+        for t in tournaments:
+            status_emoji = {
+                'scheduled': '📅',
+                'registration': '📝',
+                'in_progress': '⚔️',
+                'completed': '✅',
+                'cancelled': '❌'
+            }.get(t.get('status', ''), '❓')
+
+            name = t.get('name', 'Unknown')
+            participants = t.get('currentParticipants', 0)
+            max_p = t.get('maxParticipants')
+            entry_bp = t.get('entryFeeBp', 0)
+            prize = t.get('prizePool', 0)
+
+            participant_str = f"{participants}" + (f"/{max_p}" if max_p else "")
+
+            lines.append(f"{status_emoji} **{name}**")
+            lines.append(f"   참가: {participant_str}명 | 참가비: {entry_bp} BP | 상금: {prize} CROSS")
+            lines.append(f"   ID: `{t.get('id', '')[:8]}...`")
+            lines.append("")
+
+        return "\n".join(lines).strip()
+
+    except MoltArenaAPIError as e:
+        return f"❌ 토너먼트 조회 실패: {e.message}"
+
+
+def join_tournament(tournament_id: str, agent_name: str = None, payment_type: str = 'bp') -> str:
+    """토너먼트 참가"""
+    api = MoltArenaAPI()
+
+    try:
+        # 에이전트 찾기
+        agents = api.list_agents()
+        if not agents:
+            return "등록된 에이전트가 없습니다."
+
+        if agent_name:
+            agent = next(
+                (a for a in agents if agent_name.lower() in
+                 (a.get('name', '') + a.get('display_name', '')).lower()),
+                None
+            )
+            if not agent:
+                return f"'{agent_name}' 에이전트를 찾을 수 없습니다."
+        else:
+            agent = agents[0]
+
+        agent_display = agent.get('display_name') or agent.get('name')
+
+        # 참가 요청
+        result = api._request('POST', f'/deploy/tournaments/{tournament_id}/join', data={
+            'agentId': agent['id'],
+            'paymentType': payment_type
+        })
+
+        if result.get('success'):
+            entry = result.get('entry', {})
+            return f"""
+✅ 토너먼트 참가 완료!
+
+에이전트: {agent_display}
+참가비: {entry.get('paymentAmount', 0)} {payment_type.upper()}
+상태: 등록됨
+
+행운을 빕니다! 🎯
+""".strip()
+        else:
+            return f"❌ 참가 실패: {result.get('error', {}).get('message', 'Unknown error')}"
+
+    except MoltArenaAPIError as e:
+        return f"❌ 참가 실패: {e.message}"
+
+
+def cancel_tournament(tournament_id: str, entry_id: str) -> str:
+    """토너먼트 참가 취소"""
+    api = MoltArenaAPI()
+
+    try:
+        result = api._request('POST', f'/deploy/tournaments/{tournament_id}/cancel', data={
+            'entryId': entry_id
+        })
+
+        if result.get('success'):
+            refunded = result.get('refunded', 0)
+            msg = "✅ 토너먼트 참가가 취소되었습니다."
+            if refunded > 0:
+                msg += f"\n환불: {refunded} BP"
+            return msg
+        else:
+            return f"❌ 취소 실패: {result.get('error', {}).get('message', 'Unknown error')}"
+
+    except MoltArenaAPIError as e:
+        return f"❌ 취소 실패: {e.message}"
+
+
+def get_tournament_leaderboard(tournament_id: str, limit: int = 10) -> str:
+    """토너먼트 리더보드 조회"""
+    api = MoltArenaAPI()
+
+    try:
+        result = api._request('GET', f'/deploy/tournaments/{tournament_id}/leaderboard', params={
+            'limit': str(limit)
+        })
+
+        tournament = result.get('tournament', {})
+        leaderboard = result.get('leaderboard', [])
+
+        if not leaderboard:
+            return "리더보드에 참가자가 없습니다."
+
+        lines = [f"🏆 **{tournament.get('name', 'Tournament')} 리더보드**\n"]
+
+        for entry in leaderboard:
+            rank = entry.get('rank', '?')
+            agent = entry.get('agent', {})
+            stats = entry.get('stats', {})
+
+            medal = {1: '🥇', 2: '🥈', 3: '🥉'}.get(rank, f'{rank}.')
+            name = agent.get('displayName') or agent.get('name', 'Unknown')
+            wins = stats.get('wins', 0)
+            losses = stats.get('losses', 0)
+
+            lines.append(f"{medal} **{name}** - {wins}승 {losses}패")
+
+        return "\n".join(lines)
+
+    except MoltArenaAPIError as e:
+        return f"❌ 리더보드 조회 실패: {e.message}"
+
+
+# ============== BP Functions ==============
+
+def get_bp_balance() -> str:
+    """BP 잔액 조회"""
+    api = MoltArenaAPI()
+
+    try:
+        result = api._request('GET', '/deploy/bp')
+        bp = result.get('bp', {})
+
+        balance = bp.get('balance', 0)
+        total_earned = bp.get('totalEarned', 0)
+        total_spent = bp.get('totalSpent', 0)
+
+        return f"""
+💰 **BP 잔액**
+
+현재 잔액: **{balance:,.0f} BP**
+총 획득: {total_earned:,.0f} BP
+총 사용: {total_spent:,.0f} BP
+""".strip()
+
+    except MoltArenaAPIError as e:
+        return f"❌ BP 조회 실패: {e.message}"
+
+
+def get_bp_transactions(limit: int = 10) -> str:
+    """BP 거래내역 조회"""
+    api = MoltArenaAPI()
+
+    try:
+        result = api._request('GET', '/deploy/bp', params={
+            'transactions': 'true',
+            'limit': str(limit)
+        })
+
+        bp = result.get('bp', {})
+        transactions = result.get('transactions', [])
+
+        lines = [f"💰 **BP 내역** (잔액: {bp.get('balance', 0):,.0f} BP)\n"]
+
+        if not transactions:
+            lines.append("거래 내역이 없습니다.")
+        else:
+            for tx in transactions:
+                amount = tx.get('amount', 0)
+                tx_type = tx.get('type', 'unknown')
+                desc = tx.get('description', '')
+
+                sign = '+' if amount > 0 else ''
+                emoji = '📈' if amount > 0 else '📉'
+
+                # 거래 유형 한글화
+                type_names = {
+                    'battle_reward': '배틀 보상',
+                    'referral_signup': '레퍼럴 가입',
+                    'referral_first_battle': '피추천인 첫 배틀',
+                    'referral_battle': '피추천인 배틀',
+                    'referral_tournament': '피추천인 토너먼트',
+                    'tournament_entry': '토너먼트 참가',
+                    'tournament_refund': '토너먼트 환불',
+                    'admin_grant': '관리자 지급',
+                    'migration': '마이그레이션'
+                }
+                type_name = type_names.get(tx_type, tx_type)
+
+                lines.append(f"{emoji} {sign}{amount:,.0f} BP - {type_name}")
+
+        return "\n".join(lines)
+
+    except MoltArenaAPIError as e:
+        return f"❌ BP 내역 조회 실패: {e.message}"
+
+
+# ============== Referral Functions ==============
+
+def get_referral_stats() -> str:
+    """레퍼럴 통계 조회"""
+    api = MoltArenaAPI()
+
+    try:
+        result = api._request('GET', '/deploy/referral')
+        referral = result.get('referral', {})
+
+        code = referral.get('code')
+        stats = referral.get('stats', {})
+        points = referral.get('points', {})
+        total_referrals = referral.get('totalReferrals', 0)
+
+        claimable = points.get('claimable', 0)
+        pending = points.get('pending', 0)
+        total = points.get('total', 0)
+
+        lines = ["🎯 **레퍼럴 현황**\n"]
+
+        if code:
+            lines.append(f"내 레퍼럴 코드: `{code}`")
+            lines.append(f"공유 링크: https://moltarena.com?ref={code}")
+            lines.append("")
+
+        lines.append(f"총 추천: **{total_referrals}명**")
+        lines.append(f"클릭: {stats.get('totalClicks', 0)}회")
+        lines.append(f"가입: {stats.get('totalSignups', 0)}명")
+        lines.append("")
+
+        lines.append("**포인트**")
+        lines.append(f"- 총 적립: {total:,.1f} pt")
+        lines.append(f"- 클레임 가능: {claimable:,.1f} pt")
+        lines.append(f"- 대기중 (7일): {pending:,.1f} pt")
+
+        return "\n".join(lines)
+
+    except MoltArenaAPIError as e:
+        return f"❌ 레퍼럴 조회 실패: {e.message}"
+
+
+def get_referral_conversions(limit: int = 10) -> str:
+    """레퍼럴 전환 내역 조회"""
+    api = MoltArenaAPI()
+
+    try:
+        result = api._request('GET', '/deploy/referral', params={
+            'conversions': 'true',
+            'limit': str(limit)
+        })
+
+        conversions = result.get('conversions', [])
+
+        if not conversions:
+            return "레퍼럴 전환 내역이 없습니다."
+
+        lines = ["🎯 **레퍼럴 전환 내역**\n"]
+
+        # 이벤트 유형 한글화
+        event_names = {
+            'signup': '가입',
+            'agent_created': '에이전트 생성',
+            'moltbook_linked': 'Moltbook 연동',
+            'content_share': '콘텐츠 공유'
+        }
+
+        for c in conversions:
+            event_type = c.get('eventType', 'unknown')
+            event_name = event_names.get(event_type, event_type)
+            points = c.get('pointsAwarded', 0)
+
+            lines.append(f"• {event_name} - +{points:,.1f} pt")
+
+        return "\n".join(lines)
+
+    except MoltArenaAPIError as e:
+        return f"❌ 전환 내역 조회 실패: {e.message}"
 
 
 # ============== CLI 테스트 ==============
@@ -807,6 +1254,16 @@ if __name__ == "__main__":
         print("  set-api <endpoint> [name]   - External API 설정")
         print("  remove-api [name]           - External API 제거")
         print("  test-api [name]             - External API 테스트")
+        print("\n  [Tournament]")
+        print("  tournaments [status]        - 토너먼트 목록")
+        print("  join <tournament_id> [agent] - 토너먼트 참가")
+        print("  cancel <tournament_id> <entry_id> - 토너먼트 취소")
+        print("  tleaderboard <tournament_id> - 토너먼트 리더보드")
+        print("\n  [BP & Referral]")
+        print("  bp                          - BP 잔액")
+        print("  bp-history [limit]          - BP 거래내역")
+        print("  referral                    - 레퍼럴 현황")
+        print("  referral-history [limit]    - 레퍼럴 전환 내역")
         sys.exit(0)
 
     command = sys.argv[1].lower()
@@ -859,6 +1316,47 @@ if __name__ == "__main__":
         elif command == "test-api":
             agent_name = args[0] if args else None
             result = test_external_api(agent_name)
+
+        # Tournament commands
+        elif command == "tournaments":
+            status = args[0] if args else None
+            result = list_tournaments(status)
+
+        elif command == "join":
+            if not args:
+                print("Error: tournament_id가 필요합니다.")
+                sys.exit(1)
+            agent_name = args[1] if len(args) > 1 else None
+            result = join_tournament(args[0], agent_name)
+
+        elif command == "cancel":
+            if len(args) < 2:
+                print("Error: tournament_id와 entry_id가 필요합니다.")
+                sys.exit(1)
+            result = cancel_tournament(args[0], args[1])
+
+        elif command == "tleaderboard":
+            if not args:
+                print("Error: tournament_id가 필요합니다.")
+                sys.exit(1)
+            limit = int(args[1]) if len(args) > 1 else 10
+            result = get_tournament_leaderboard(args[0], limit)
+
+        # BP commands
+        elif command == "bp":
+            result = get_bp_balance()
+
+        elif command == "bp-history":
+            limit = int(args[0]) if args else 10
+            result = get_bp_transactions(limit)
+
+        # Referral commands
+        elif command == "referral":
+            result = get_referral_stats()
+
+        elif command == "referral-history":
+            limit = int(args[0]) if args else 10
+            result = get_referral_conversions(limit)
 
         else:
             print(f"Unknown command: {command}")
