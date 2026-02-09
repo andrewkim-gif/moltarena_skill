@@ -197,18 +197,29 @@ class MoltArenaAPI:
         agent_id: str,
         matchmaking: str = "similar_rating",
         opponent_id: str = None,
-        topic: str = None
+        topic: str = None,
+        language: str = "ko",
+        rounds: int = 5
     ) -> Dict:
-        """배틀 시작"""
+        """배틀 시작
+
+        Args:
+            agent_id: 내 에이전트 ID (필수)
+            matchmaking: 매칭 방식 (사용되지 않음, 랜덤 매칭)
+            opponent_id: 상대 에이전트 ID (없으면 랜덤 매칭)
+            topic: 배틀 토픽 (없으면 자동 생성)
+            language: 언어 (en/ko/zh/ja/es, 기본 ko)
+            rounds: 라운드 수 (3-10, 기본 5)
+        """
         payload = {
-            "agentId": agent_id,
-            "autoStart": True
+            "agent1Id": agent_id,
+            "language": language,
+            "rounds": rounds
         }
 
         if opponent_id:
-            payload["opponentId"] = opponent_id
-        else:
-            payload["matchmaking"] = {"strategy": matchmaking}
+            payload["agent2Id"] = opponent_id
+        # opponent_id 없으면 서버에서 자동 랜덤 매칭
 
         if topic:
             payload["topic"] = topic
@@ -648,10 +659,13 @@ def start_battle(
         # 배틀 시작
         result = api.start_battle(agent['id'], matchmaking=matchmaking)
         battle = result.get('battle', {})
-        opponent = battle.get('agent_b', {})
+
+        # API 응답 형식: participants.agent1, participants.agent2
+        participants = battle.get('participants', {})
+        opponent = participants.get('agent2', {})
 
         agent_name = agent.get('display_name') or agent.get('name')
-        opponent_name = opponent.get('display_name') or opponent.get('name', 'Unknown')
+        opponent_name = opponent.get('displayName') or opponent.get('name', 'Unknown')
         agent_rating = agent.get('rating', 1500)
         opponent_rating = opponent.get('rating', 1500)
 
@@ -932,7 +946,7 @@ def heartbeat() -> List[str]:
 # ============== Tournament Functions ==============
 
 def list_tournaments(status: str = None) -> str:
-    """활성 토너먼트 목록 조회"""
+    """활성 토너먼트 목록 조회 (참가 상태 포함)"""
     api = MoltArenaAPI()
 
     try:
@@ -949,13 +963,14 @@ def list_tournaments(status: str = None) -> str:
         lines = ["🏆 **토너먼트 목록**\n"]
 
         for t in tournaments:
+            t_status = t.get('status', '')
             status_emoji = {
                 'scheduled': '📅',
                 'registration': '📝',
                 'in_progress': '⚔️',
                 'completed': '✅',
                 'cancelled': '❌'
-            }.get(t.get('status', ''), '❓')
+            }.get(t_status, '❓')
 
             name = t.get('name', 'Unknown')
             participants = t.get('currentParticipants', 0)
@@ -965,8 +980,33 @@ def list_tournaments(status: str = None) -> str:
 
             participant_str = f"{participants}" + (f"/{max_p}" if max_p else "")
 
+            # 참가 상태 및 참가 가능 여부 표시 (v2.1 개선)
+            my_entry = t.get('myEntry')
+            can_join = t.get('canJoin', False)
+            can_join_reason = t.get('canJoinReason', '')
+
+            if my_entry:
+                # 이미 참가함
+                agent_name = my_entry.get('agentName', 'Unknown')
+                entry_status = "✅ 참가 중"
+                join_info = f"   {entry_status} ({agent_name})"
+            elif can_join:
+                join_info = "   🟢 참가 가능"
+            else:
+                # 참가 불가 사유 한글화
+                reason_kr = {
+                    'already_registered': '이미 참가함',
+                    'status_in_progress': '진행 중',
+                    'status_completed': '종료됨',
+                    'status_scheduled': '등록 기간 전',
+                    'registration_closed': '등록 마감',
+                    'tournament_full': '정원 마감'
+                }.get(can_join_reason, can_join_reason)
+                join_info = f"   🔴 참가 불가 ({reason_kr})"
+
             lines.append(f"{status_emoji} **{name}**")
             lines.append(f"   참가: {participant_str}명 | 참가비: {entry_bp} BP | 상금: {prize} CROSS")
+            lines.append(join_info)
             lines.append(f"   ID: `{t.get('id', '')[:8]}...`")
             lines.append("")
 
